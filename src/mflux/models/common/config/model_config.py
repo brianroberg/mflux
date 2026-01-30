@@ -117,6 +117,11 @@ class ModelConfig:
 
     @staticmethod
     @lru_cache
+    def z_image() -> "ModelConfig":
+        return AVAILABLE_MODELS["z-image"]
+
+    @staticmethod
+    @lru_cache
     def z_image_turbo() -> "ModelConfig":
         return AVAILABLE_MODELS["z-image-turbo"]
 
@@ -349,9 +354,21 @@ AVAILABLE_MODELS = {
         supports_guidance=True,
         requires_sigma_shift=False,
     ),
-    "z-image-turbo": ModelConfig(
+    "z-image": ModelConfig(
         priority=16,
-        aliases=["z-image-turbo", "z-image", "zimage-turbo", "zimage"],
+        aliases=["z-image", "zimage"],
+        model_name="Tongyi-MAI/Z-Image",
+        base_model=None,
+        controlnet_model=None,
+        custom_transformer_model=None,
+        num_train_steps=1000,
+        max_sequence_length=512,
+        supports_guidance=True,
+        requires_sigma_shift=True,
+    ),
+    "z-image-turbo": ModelConfig(
+        priority=17,
+        aliases=["z-image-turbo", "zimage-turbo"],
         model_name="Tongyi-MAI/Z-Image-Turbo",
         base_model=None,
         controlnet_model=None,
@@ -362,7 +379,7 @@ AVAILABLE_MODELS = {
         requires_sigma_shift=True,
     ),
     "seedvr2-3b": ModelConfig(
-        priority=17,
+        priority=18,
         aliases=["seedvr2-3b", "seedvr2"],
         model_name="numz/SeedVR2_comfyUI",
         base_model=None,
