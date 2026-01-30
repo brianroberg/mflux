@@ -19,6 +19,8 @@ from mflux.utils.exceptions import StopImageGenerationException
 from mflux.utils.generated_image import GeneratedImage
 from mflux.utils.image_util import ImageUtil
 
+DEFAULT_NEGATIVE_PROMPT = " "  # Space ensures valid tokenization for empty negative prompts
+
 
 class ZImage(nn.Module):
     vae: VAE
@@ -54,6 +56,7 @@ class ZImage(nn.Module):
         image_path: Path | str | None = None,
         image_strength: float | None = None,
         scheduler: str = "linear",
+        negative_prompt: str | None = None,
     ) -> GeneratedImage:
         # 0. Create a new config based on the model type and input parameters
         config = Config(
@@ -82,9 +85,16 @@ class ZImage(nn.Module):
             ),
         )
 
-        # 2. Encode the prompt
+        # 2. Encode the prompt and negative prompt for CFG
         text_encodings = PromptEncoder.encode_prompt(
             prompt=prompt,
+            tokenizer=self.tokenizers["z_image"],
+            text_encoder=self.text_encoder,
+        )
+        # Use space as fallback for empty negative prompt to ensure valid tokenization
+        effective_negative_prompt = negative_prompt if negative_prompt and negative_prompt.strip() else DEFAULT_NEGATIVE_PROMPT
+        negative_text_encodings = PromptEncoder.encode_prompt(
+            prompt=effective_negative_prompt,
             tokenizer=self.tokenizers["z_image"],
             text_encoder=self.text_encoder,
         )
@@ -95,7 +105,7 @@ class ZImage(nn.Module):
 
         for t in config.time_steps:
             try:
-                # 4.t Predict the noise
+                # 4.t Predict the noise (conditional)
                 noise = self.transformer(
                     t=t,
                     x=latents,
@@ -103,8 +113,19 @@ class ZImage(nn.Module):
                     sigmas=config.scheduler.sigmas,
                 )
 
+                # 4.t Predict the noise (unconditional) for CFG
+                noise_negative = self.transformer(
+                    t=t,
+                    x=latents,
+                    cap_feats=negative_text_encodings,
+                    sigmas=config.scheduler.sigmas,
+                )
+
+                # 4.t Apply Classifier-Free Guidance
+                guided_noise = ZImage.compute_guided_noise(noise, noise_negative, config.guidance)
+
                 # 5.t Take one denoise step
-                latents = config.scheduler.step(noise=noise, timestep=t, latents=latents)
+                latents = config.scheduler.step(noise=guided_noise, timestep=t, latents=latents)
 
                 # 6.t Call subscribers in-loop
                 ctx.in_loop(t, latents)
@@ -135,6 +156,7 @@ class ZImage(nn.Module):
             image_path=config.image_path,
             image_strength=config.image_strength,
             generation_time=config.time_steps.format_dict["elapsed"],
+            negative_prompt=negative_prompt,
         )
 
     def save_model(self, base_path: str) -> None:
@@ -144,3 +166,16 @@ class ZImage(nn.Module):
             base_path=base_path,
             weight_definition=ZImageWeightDefinition,
         )
+
+    @staticmethod
+    def compute_guided_noise(
+        noise: mx.array,
+        noise_negative: mx.array,
+        guidance: float,
+    ) -> mx.array:
+        # Standard CFG formula: output = negative + scale * (positive - negative)
+        combined = noise_negative + guidance * (noise - noise_negative)
+        # Apply normalization to prevent over-saturation
+        cond_norm = mx.sqrt(mx.sum(noise * noise, axis=-1, keepdims=True) + 1e-12)
+        combined_norm = mx.sqrt(mx.sum(combined * combined, axis=-1, keepdims=True) + 1e-12)
+        return combined * (cond_norm / combined_norm)

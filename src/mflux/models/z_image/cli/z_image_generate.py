@@ -52,6 +52,7 @@ def main():
             image = model.generate_image(
                 seed=seed,
                 prompt=PromptUtil.read_prompt(args),
+                negative_prompt=PromptUtil.read_negative_prompt(args),
                 width=width,
                 height=height,
                 guidance=args.guidance,
