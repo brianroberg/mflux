@@ -1,14 +1,95 @@
-# Z-Image Turbo
-This directory contains MFLUX’s MLX implementation of **Z-Image-Turbo**.
+# Z-Image
+This directory contains MFLUX's MLX implementation of **Z-Image** and **Z-Image-Turbo**.
 
-MFLUX supports [Z-Image-Turbo](https://huggingface.co/Tongyi-MAI/Z-Image-Turbo) from Tongyi Lab (Alibaba), released in November 2025. Z-Image is an efficient 6B-parameter image generation model with a single-stream DiT architecture. Z-Image-Turbo delivers high-quality images in just 9 steps, making it one of the fastest open-source models available.
+MFLUX supports [Z-Image](https://huggingface.co/Tongyi-MAI/Z-Image) and [Z-Image-Turbo](https://huggingface.co/Tongyi-MAI/Z-Image-Turbo) from Tongyi Lab (Alibaba), released in November 2025. Z-Image is an efficient 6B-parameter image generation model with a single-stream DiT architecture. See the [technical paper](https://arxiv.org/abs/2511.22699) for more details.
 
-All the standard modes such as img2img, LoRA and quantizations are supported for this model. See the [technical paper](https://arxiv.org/abs/2511.22699) for more details.
+| Model | Steps | CFG | Speed | Best for |
+| --- | --- | --- | --- | --- |
+| Z-Image (Base) | 28-50 | Yes (guidance 3-5) | Slower | Maximum quality, complex prompts, negative prompt control |
+| Z-Image-Turbo | 8-9 | No (distilled) | Fast | Quick iterations, general use |
+
+All the standard modes such as img2img, LoRA and quantizations are supported for both models.
 
 ![Z-Image-Turbo Example](../../assets/z_image_turbo_example.jpg)
 
-## Example
-The following uses the pre-quantized 4-bit model from [filipstrand/Z-Image-Turbo-mflux-4bit](https://huggingface.co/filipstrand/Z-Image-Turbo-mflux-4bit) to generate a vibrant 1960s style image with a LoRA adapter [Technically Color](https://huggingface.co/renderartist/Technically-Color-Z-Image-Turbo) for enhanced film color:
+## Z-Image (Base Model)
+
+The base model supports full Classifier-Free Guidance (CFG), providing higher quality output with support for negative prompts. Recommended settings: 28-50 steps with guidance scale 3.0-5.0.
+
+### CLI Example
+
+```sh
+mflux-generate-z-image \
+  --prompt "A serene coastal landscape at sunset with dramatic clouds over the ocean" \
+  --negative-prompt "blurry, distorted, low quality" \
+  --width 1024 \
+  --height 1024 \
+  --seed 42 \
+  --steps 40 \
+  --guidance 4.0 \
+  -q 8
+```
+
+<details>
+<summary>Python API</summary>
+
+```python
+from mflux.models.z_image import ZImage
+
+model = ZImage(quantize=8)
+image = model.generate_image(
+    seed=42,
+    prompt="A serene coastal landscape at sunset with dramatic clouds over the ocean",
+    negative_prompt="blurry, distorted, low quality",
+    num_inference_steps=40,
+    guidance=4.0,
+    width=1024,
+    height=1024,
+)
+image.save("z_image_output.png")
+```
+</details>
+
+> [!NOTE]
+> The base model runs the transformer twice per step (for CFG), so generation takes roughly twice as long per step compared to Turbo. However, the improved quality from CFG often allows using fewer total steps while achieving better results.
+
+## Z-Image-Turbo (Distilled Model)
+
+Z-Image-Turbo is a distilled model that has CFG behavior baked in, delivering high-quality images in just 8-9 steps without needing guidance scaling. This makes it one of the fastest open-source models available.
+
+### CLI Example
+
+```sh
+mflux-generate-z-image-turbo \
+  --prompt "A puffin standing on a cliff" \
+  --width 1280 \
+  --height 720 \
+  --seed 42 \
+  --steps 9 \
+  -q 8
+```
+
+<details>
+<summary>Python API</summary>
+
+```python
+from mflux.models.z_image import ZImageTurbo
+
+model = ZImageTurbo(quantize=8)
+image = model.generate_image(
+    seed=42,
+    prompt="A puffin standing on a cliff",
+    num_inference_steps=9,
+    width=1280,
+    height=720,
+)
+image.save("z_image_turbo.png")
+```
+</details>
+
+### Advanced Example with LoRA
+
+The following uses the pre-quantized 4-bit model from [filipstrand/Z-Image-Turbo-mflux-4bit](https://huggingface.co/filipstrand/Z-Image-Turbo-mflux-4bit) with a LoRA adapter [Technically Color](https://huggingface.co/renderartist/Technically-Color-Z-Image-Turbo) for enhanced film color:
 
 ```sh
 mflux-generate-z-image-turbo \
@@ -46,10 +127,18 @@ image.save("z_image_turbo.png")
 ```
 </details>
 
+## Model Weights
+
 > [!WARNING]
-> Note: Z-Image-Turbo requires downloading the `Tongyi-MAI/Z-Image-Turbo` model weights (~31GB), or use quantization for smaller sizes.
+> Note: Z-Image models require downloading model weights (~31GB each), or use quantization for smaller sizes.
+
+| Model | Full weights | Quantized |
+| --- | --- | --- |
+| Z-Image | [Tongyi-MAI/Z-Image](https://huggingface.co/Tongyi-MAI/Z-Image) | Use `-q 4` or `-q 8` |
+| Z-Image-Turbo | [Tongyi-MAI/Z-Image-Turbo](https://huggingface.co/Tongyi-MAI/Z-Image-Turbo) | [filipstrand/Z-Image-Turbo-mflux-4bit](https://huggingface.co/filipstrand/Z-Image-Turbo-mflux-4bit) |
+
+## Additional Resources
 
 *Dreambooth fine-tuning for Z-Image is not yet supported in MFLUX but is planned. In the meantime, you can train Z-Image-Turbo LoRAs using [AI Toolkit](https://github.com/ostris/ai-toolkit) - see [How to Train a Z-Image-Turbo LoRA with AI Toolkit](https://www.youtube.com/watch?v=Kmve1_jiDpQ) by Ostris AI.*
 
 *For a Swift MLX implementation of Z-Image, see [zimage.swift](https://github.com/mzbac/zimage.swift) by [@mzbac](https://github.com/mzbac).*
-
